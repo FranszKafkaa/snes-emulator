@@ -1,0 +1,32 @@
+[
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/application.cpp",
+    "file": "/Users/marcelojanke/snes/src/application.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/debug_font.cpp",
+    "file": "/Users/marcelojanke/snes/src/debug_font.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/launch_options.cpp",
+    "file": "/Users/marcelojanke/snes/src/launch_options.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/main.cpp",
+    "file": "/Users/marcelojanke/snes/src/main.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/media_pipeline.cpp",
+    "file": "/Users/marcelojanke/snes/src/media_pipeline.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/save_manager.cpp",
+    "file": "/Users/marcelojanke/snes/src/save_manager.cpp"
+  }
+]

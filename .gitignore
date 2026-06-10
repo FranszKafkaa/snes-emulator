@@ -1,0 +1,9 @@
+build/
+*.srm
+*.state
+.DS_Store
+*.sfc
+third_party/*
+.cache
+*.log
+*.txt
