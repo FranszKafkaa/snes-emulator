@@ -2,10 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iostream>
+#include <filesystem>
 #include <string>
-
-#include "debug_font.h"
+#include <system_error>
 
 namespace snes::frontend {
 namespace {

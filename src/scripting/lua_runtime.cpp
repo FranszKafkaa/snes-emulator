@@ -1,24 +1,20 @@
 #include "frontend/runtime_context.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cctype>
-#include <cstdarg>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <dlfcn.h>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <limits>
-#include <span>
-#include <sstream>
-#include <thread>
 #include <spawn.h>
+#include <string>
 #include <sys/wait.h>
+#include <utility>
 
-#include "debug_font.h"
+extern "C" {
+#include <lauxlib.h>
+#include <lualib.h>
+}
+
 extern char **environ;
 
 namespace snes::frontend {

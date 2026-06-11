@@ -222,9 +222,12 @@ Exemplos incluidos:
   apenas sobreviver parado. Nas primeiras geracoes, tambem usa um assistente
   temporario de salto contra inimigo proximo para nao travar no primeiro bicho;
   controle isso com `SMW_NEAT_ASSIST_GENS=0` ou outro numero de geracoes. Alem
-  do grid vermelho de sprites, a rede recebe entradas diretas de perigo:
-  distancia do inimigo a frente, altura relativa, ameaca imediata e colisao
-  proxima; contatos tambem reduzem o fitness.
+  do grid vermelho de sprites, a rede recebe entradas diretas de perigo e
+  navegacao: distancia do inimigo a frente, altura relativa, ameaca imediata,
+  colisao proxima, chao sob o Mario, chao a frente, buraco, parede, teto/bloco
+  acima, caixa de dica ativa e caminho livre; contatos tambem reduzem o
+  fitness. Mudancas no formato de sensores incrementam a versao do pool e fazem
+  pools antigos serem ignorados para evitar genomas lendo entradas erradas.
 
 Para testar varias populacoes NEAT ao mesmo tempo, abra mais de uma instancia
 do emulador usando arquivos de pool diferentes. Cada instancia exporta seu
@@ -275,12 +278,20 @@ automaticamente.
 | Pausar | P |
 | Editor Lua | - |
 | Importar/carregar script Lua | K |
+| Menu de filtros de video | V |
 | Debug do mapa de memória | I |
 | Tela cheia | F11 |
 | Sair | Esc |
 
 O save do cartucho é gravado ao lado da ROM com extensão `.srm`. O save state
 usa a extensão `.state`.
+
+## Filtros de vídeo
+
+Pressione `V` durante o jogo para abrir o menu de filtros. Use as setas para
+navegar, `Enter` ou `Space` para aplicar, teclas `1` a `7` para aplicar direto,
+e `V` ou `Esc` para fechar. Os filtros mantêm o jogo em `4:3` esticado; eles só
+alteram a amostragem da textura ou adicionam overlays visuais.
 
 O painel é aberto ao lado do jogo e não cobre a imagem. Ele mostra WRAM
 (`$7E0000-$7FFFFF`), VRAM e SRAM em tempo real.

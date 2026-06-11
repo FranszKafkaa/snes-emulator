@@ -1,8 +1,38 @@
 [
   {
     "directory": "/Users/marcelojanke/snes",
-    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/application.cpp",
-    "file": "/Users/marcelojanke/snes/src/application.cpp"
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/save_manager.cpp",
+    "file": "/Users/marcelojanke/snes/src/save_manager.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/scripting/lua_runtime.cpp",
+    "file": "/Users/marcelojanke/snes/src/scripting/lua_runtime.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/scripting/script_picker.cpp",
+    "file": "/Users/marcelojanke/snes/src/scripting/script_picker.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/frontend/video_filters.cpp",
+    "file": "/Users/marcelojanke/snes/src/frontend/video_filters.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/frontend/runtime_services.cpp",
+    "file": "/Users/marcelojanke/snes/src/frontend/runtime_services.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/frontend/input_controller.cpp",
+    "file": "/Users/marcelojanke/snes/src/frontend/input_controller.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/frontend/runtime_context.cpp",
+    "file": "/Users/marcelojanke/snes/src/frontend/runtime_context.cpp"
   },
   {
     "directory": "/Users/marcelojanke/snes",
@@ -16,8 +46,8 @@
   },
   {
     "directory": "/Users/marcelojanke/snes",
-    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/main.cpp",
-    "file": "/Users/marcelojanke/snes/src/main.cpp"
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/debugger/memory_debugger.cpp",
+    "file": "/Users/marcelojanke/snes/src/debugger/memory_debugger.cpp"
   },
   {
     "directory": "/Users/marcelojanke/snes",
@@ -26,7 +56,22 @@
   },
   {
     "directory": "/Users/marcelojanke/snes",
-    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/save_manager.cpp",
-    "file": "/Users/marcelojanke/snes/src/save_manager.cpp"
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/application.cpp",
+    "file": "/Users/marcelojanke/snes/src/application.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/emulator/libretro_host.cpp",
+    "file": "/Users/marcelojanke/snes/src/emulator/libretro_host.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -I/opt/homebrew/include -I/opt/homebrew/include/SDL2 -D_THREAD_SAFE -I/opt/homebrew/Cellar/luajit/2.1.1780076327/include/luajit-2.1 -Iinclude -c src/main.cpp",
+    "file": "/Users/marcelojanke/snes/src/main.cpp"
+  },
+  {
+    "directory": "/Users/marcelojanke/snes",
+    "command": "clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -F/opt/homebrew/lib -I/opt/homebrew/lib/QtWidgets.framework/Headers -I/opt/homebrew/lib/QtWidgets.framework -DQT_WIDGETS_LIB -I/opt/homebrew/lib/QtGui.framework/Headers -I/opt/homebrew/lib/QtGui.framework -DQT_GUI_LIB -I/opt/homebrew/lib/QtCore.framework/Headers -I/opt/homebrew/lib/QtCore.framework -DQT_CORE_LIB -I/opt/homebrew/share/qt/mkspecs/macx-clang -I/opt/homebrew/include -c src/lua_editor_qt.cpp",
+    "file": "/Users/marcelojanke/snes/src/lua_editor_qt.cpp"
   }
 ]

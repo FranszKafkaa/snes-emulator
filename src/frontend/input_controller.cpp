@@ -1,26 +1,9 @@
 #include "frontend/runtime_context.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cctype>
-#include <cstdarg>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <dlfcn.h>
-#include <fstream>
-#include <iostream>
-#include <limits>
-#include <span>
-#include <sstream>
-#include <thread>
-#include <spawn.h>
-#include <sys/wait.h>
-
-#include "debug_font.h"
-
-extern char **environ;
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace snes::frontend {
 
@@ -382,6 +365,9 @@ void handle_events() {
         if (handle_lua_script_picker_key(event.key.keysym.sym)) {
             continue;
         }
+        if (handle_video_filter_menu_key(event.key.keysym.sym)) {
+            continue;
+        }
         if (event.key.keysym.sym == SDLK_k) {
             open_lua_script_picker();
             continue;
@@ -399,6 +385,13 @@ void handle_events() {
             continue;
         }
         if (handle_goto_popup_key(event.key.keysym.sym)) {
+            continue;
+        }
+        if (event.key.keysym.sym == SDLK_v &&
+            !app.memory_editor.active &&
+            !app.memory_editor.text_mode &&
+            !app.memory_editor.goto_popup) {
+            open_video_filter_menu();
             continue;
         }
         if (event.key.keysym.sym == SDLK_i) {

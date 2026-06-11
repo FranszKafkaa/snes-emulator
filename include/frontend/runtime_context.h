@@ -12,8 +12,6 @@
 
 extern "C" {
 #include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
 }
 
 #include "libretro.h"
@@ -182,6 +180,22 @@ struct ScriptImportPrompt {
     std::string status = "SELECIONE UM SCRIPT LUA";
 };
 
+enum class VideoFilterKind {
+    Sharp,
+    Smooth,
+    Scanlines,
+    Crt,
+    LcdGrid,
+    Warm,
+    Green,
+};
+
+struct VideoFilterState {
+    VideoFilterKind current = VideoFilterKind::Sharp;
+    VideoFilterKind selected = VideoFilterKind::Sharp;
+    bool menu_active = false;
+};
+
 struct Frontend {
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
@@ -209,6 +223,7 @@ struct Frontend {
     LuaRuntime lua;
     ScriptEditorLauncher script_editor;
     ScriptImportPrompt script_import;
+    VideoFilterState video_filter;
     std::unique_ptr<snes::VideoPipeline> video_pipeline;
     std::unique_ptr<snes::AudioPipeline> audio_pipeline;
     uint64_t presented_serial = 0;
@@ -258,6 +273,13 @@ bool handle_lua_script_picker_key(SDL_Keycode key);
 void draw_lua_script_picker();
 void reload_script_if_changed();
 void run_lua_frame();
+
+const char *video_filter_name(VideoFilterKind filter);
+void apply_video_filter_to_texture();
+void draw_video_filter_overlay();
+void open_video_filter_menu();
+bool handle_video_filter_menu_key(SDL_Keycode key);
+void draw_video_filter_menu();
 
 void clamp_editor_address();
 void apply_debug_layout(bool enabled, bool fullscreen);

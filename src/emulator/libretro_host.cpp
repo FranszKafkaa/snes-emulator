@@ -1,26 +1,15 @@
 #include "frontend/runtime_context.h"
 
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cctype>
 #include <cstdarg>
 #include <cstdio>
-#include <cstdlib>
+#include <cstdint>
 #include <cstring>
-#include <dlfcn.h>
-#include <fstream>
 #include <iostream>
-#include <limits>
+#include <memory>
 #include <span>
-#include <sstream>
-#include <thread>
-#include <spawn.h>
-#include <sys/wait.h>
-
-#include "debug_font.h"
-
-extern char **environ;
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace snes::frontend {
 
@@ -223,6 +212,7 @@ void present_latest_frame() {
             app.running = false;
             return;
         }
+        apply_video_filter_to_texture();
         app.texture_width = frame->width;
         app.texture_height = frame->height;
     }
@@ -233,9 +223,11 @@ void present_latest_frame() {
     SDL_RenderClear(app.renderer);
     const SDL_Rect game_area{0, 0, game_width, game_height};
     SDL_RenderCopy(app.renderer, app.texture, nullptr, &game_area);
+    draw_video_filter_overlay();
     draw_lua_overlay();
     draw_frontend_status();
     draw_lua_script_picker();
+    draw_video_filter_menu();
     if (app.memory_debug && !window_fullscreen()) {
         draw_screen_memory_marker();
         draw_memory_debugger();
@@ -269,7 +261,8 @@ int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id) {
         return 1;
     }
     if (app.headless ||
-        app.memory_editor.active || app.memory_editor.goto_popup) {
+        app.memory_editor.active || app.memory_editor.goto_popup ||
+        app.script_import.active || app.video_filter.menu_active) {
         return 0;
     }
     const Uint8 *keys = SDL_GetKeyboardState(nullptr);

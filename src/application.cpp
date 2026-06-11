@@ -6,8 +6,8 @@
 #include <string>
 #include <thread>
 
-#include "frontend/runtime_context.h"
 #include "application.h"
+#include "frontend/runtime_context.h"
 #include "launch_options.h"
 #include "libretro.h"
 
@@ -16,6 +16,7 @@ int snes::Application::run(int argc, char **argv) {
 
     const auto options = parse_launch_options(argc, argv);
     if (!options) return 0;
+
     const uint64_t frame_limit = options->frame_limit;
     rom_path = options->rom_path;
     app.script_editor.path = options->script_path.empty()
