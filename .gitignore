@@ -7,3 +7,4 @@ third_party/*
 .cache
 *.log
 *.txt
+scripts/*

@@ -5,10 +5,11 @@ núcleo compilado para macOS Apple Silicon e usa `mario.sfc` como ROM padrão.
 
 ## Compilar e executar
 
-Requisitos: compilador com C++20, `make`, `pkg-config` e SDL2.
+Requisitos: compilador com C++20, `make`, `pkg-config`, SDL2, LuaJIT,
+Qt6 e QScintilla.
 
 ```sh
-brew install sdl2 pkg-config
+brew install sdl2 luajit pkg-config qtbase qscintilla2
 make
 make run
 ```
@@ -54,62 +55,64 @@ A API disponível fica na tabela global `snes`:
 - `snes.read16(endereco)` / `snes.write16(endereco, valor)`
 - `snes.press("right")`, `snes.release("right")`
 - `snes.set_button("b", true)` e `snes.clear_input()`
-- `snes.frame()` e `snes.log(...)`
+- `snes.frame()`, `snes.speed()` e `snes.log(...)`
 
 Botões aceitos: `up`, `down`, `left`, `right`, `a`, `b`, `x`, `y`, `l`, `r`,
 `start`, `select`. O estado dos botões persiste até o script liberar ou chamar
 `clear_input()`, então scripts de automação normalmente começam cada frame com
 `snes.clear_input()`.
 
-### Editor leve de scripts
+Pressione `Tab` na janela do emulador para alternar o turbo do frontend. Isso
+acelera o treino sem depender do script Lua.
 
-O projeto inclui um editor de texto em LuaJIT para criar e ajustar scripts do
-emulador sem depender de IDE:
+Pressione `I` para abrir o debug de memória ao lado do jogo, na mesma janela,
+quando estiver em modo janela. Em tela cheia, o jogo continua sempre em `4:3`
+esticado no canvas inteiro, sem barras pretas; o debug lateral aparece ao sair
+da tela cheia.
 
-```sh
-make script-editor
-```
+### Editor de scripts
 
-Por padrão ele abre `scripts/novo-script.lua`. Também é possível escolher outro
-arquivo:
+Pressione `-` dentro do emulador para abrir o `SNES Lua Studio`, um editor
+bundled do próprio projeto baseado em Qt/QScintilla. Ele não desenha texto via
+SDL: usa o componente Scintilla, com seleção, scroll, undo/redo, numeração de
+linhas, syntax highlighting de Lua e autocomplete.
 
-```sh
-make script-editor SCRIPT=scripts/meu-bot.lua
-```
+O arquivo aberto é o caminho passado em `--script`; quando nenhum script é
+informado, o emulador cria e abre `scripts/novo-script.lua`. Ao salvar no
+editor, o emulador detecta a mudança no arquivo e recarrega o script.
 
-Atalhos principais:
+Pressione `K` dentro do emulador para abrir uma lista interna com os scripts
+`.lua` encontrados em `scripts/`. Use as setas para navegar, `Enter` para
+carregar o script no runtime Lua, `R` para atualizar a lista e `Esc` para
+fechar.
 
-| Ação | Tecla |
-|---|---|
-| Salvar | Ctrl-S |
-| Sair | Ctrl-Q |
-| Autocompletar Lua/API do emulador | Tab |
-| Navegar | Setas, Home, End, Page Up, Page Down |
+Ao escolher um script, o emulador copia o arquivo para `scripts/imported/`,
+carrega imediatamente no runtime Lua e passa a abrir esse script no SNES Lua
+Studio quando você pressiona `-`.
 
-O autocomplete sugere palavras-chave de Lua, funções comuns da biblioteca
-padrão, símbolos já existentes no arquivo e a API do emulador (`snes.read8`,
-`snes.write8`, `snes.press`, `snes.clear_input`, etc.). Para testar sugestões
-fora do editor:
-
-```sh
-luajit scripts/snes-editor.lua --complete snes.
-```
-
-Dentro do emulador, pressione `-` para abrir o editor Lua integrado. Ele pausa a
-emulação, abre o arquivo passado em `--script` ou `scripts/novo-script.lua`
-quando nenhum script foi informado, e permite editar sem sair da janela.
-
-Atalhos do editor integrado:
+Atalhos do editor:
 
 | Ação | Tecla |
 |---|---|
 | Abrir editor Lua | - |
+| Importar/carregar script Lua | K |
 | Salvar | Ctrl-S |
-| Salvar e recarregar script | Ctrl-R |
-| Autocompletar Lua/API do emulador | Tab |
-| Fechar editor e voltar ao jogo | Esc |
-| Navegar | Setas, Home, End, Page Up, Page Down |
-| Apagar | Backspace, Delete |
+| Salvar e recarregar | Ctrl-R |
+| Autocomplete | Ctrl-Space ou digitar prefixo |
+| Navegar/editar | Atalhos nativos do Scintilla |
+
+O autocomplete abre automaticamente ao digitar e também pode ser acionado com
+`Ctrl-Space`. Digitar `snes.` lista a API do emulador; dentro de strings de
+botão, como `snes.press("r`, ele sugere os nomes de botões. O catálogo inclui:
+
+- API do emulador: `snes.read8`, `snes.write8`, `snes.press`,
+  `snes.clear_input`, `snes.log`, etc.
+- Linguagem Lua, LuaJIT e biblioteca padrão: `function`, `local`, `if`, `for`,
+  `math.*`, `string.*`, `table.*`, `coroutine.*`, `io.*`, `os.*`, `pairs`,
+  `ipairs`, etc.
+- Botões aceitos pelo emulador: `"right"`, `"b"`, `"start"`, `"select"`, etc.
+- Snippets úteis como `on_frame(frame)` e exemplos de chamadas `snes.*`.
+- Símbolos encontrados no script aberto.
 
 ### Documentação da API Lua
 
@@ -141,7 +144,15 @@ endereços inteiros. Para WRAM, use endereços absolutos do barramento SNES, com
 | `snes.set_button(botao, ativo)` | nenhum | Define diretamente o estado do botão. |
 | `snes.clear_input()` | nenhum | Solta todos os botões controlados pelo script. |
 | `snes.frame()` | número | Retorna o frame atual do frontend. |
+| `snes.set_speed(multiplicador)` | número | Roda mais frames de emulação por atualização visual; aceita de `1` a `64`. |
+| `snes.speed()` | número | Retorna o multiplicador de velocidade efetivo, incluindo o turbo do frontend. |
 | `snes.log(...)` | nenhum | Imprime valores no terminal com prefixo `[lua]`. |
+| `snes.save_state()` | booleano | Salva o estado atual no arquivo `.state` da ROM. |
+| `snes.load_state()` | booleano | Carrega o estado salvo no arquivo `.state` da ROM. |
+| `snes.draw_text(x, y, texto, r, g, b, a, escala)` | nenhum | Desenha texto no overlay do jogo. |
+| `snes.draw_rect(x, y, largura, altura, r, g, b, a, preenchido)` | nenhum | Desenha retangulo no overlay. |
+| `snes.draw_line(x1, y1, x2, y2, r, g, b, a)` | nenhum | Desenha linha no overlay. |
+| `snes.clear_overlay()` | nenhum | Limpa comandos graficos do frame atual. |
 
 Botões aceitos:
 
@@ -192,6 +203,48 @@ end
 fora das regiões conhecidas pelo frontend, leituras retornam `nil` e escritas
 retornam `false`.
 
+As funcoes graficas usam o mesmo espaco logico da tela do emulador:
+`1024x768`. O overlay e limpo automaticamente no inicio de cada `on_frame`,
+entao scripts normalmente chamam `draw_*` a cada frame para mostrar HUD,
+sensores, labels ou depuracao visual sobre o jogo.
+
+Exemplos incluidos:
+
+- `scripts/exemplo-bot.lua`: bot minimo para demonstrar input automatizado.
+- `scripts/smw-primeira-fase.lua`: bot heuristico para Super Mario World que
+  segura corrida, avanca para a direita e agenda saltos por posicao de mundo
+  para tentar finalizar a primeira fase.
+- `scripts/smw-neat-ai.lua`: bot evolutivo para Super Mario World, com sensores
+  de tiles/sprites, rede neural mutavel, crossover, fitness por progresso,
+  reset por save state e persistencia em `scripts/smw-neat.pool.lua`.
+  Ele diferencia falha por queda de falha por inimigo usando contato/dano
+  recente antes da animacao de morte, e prioriza progresso rapido em vez de
+  apenas sobreviver parado. Nas primeiras geracoes, tambem usa um assistente
+  temporario de salto contra inimigo proximo para nao travar no primeiro bicho;
+  controle isso com `SMW_NEAT_ASSIST_GENS=0` ou outro numero de geracoes. Alem
+  do grid vermelho de sprites, a rede recebe entradas diretas de perigo:
+  distancia do inimigo a frente, altura relativa, ameaca imediata e colisao
+  proxima; contatos tambem reduzem o fitness.
+
+Para testar varias populacoes NEAT ao mesmo tempo, abra mais de uma instancia
+do emulador usando arquivos de pool diferentes. Cada instancia exporta seu
+campeao para `scripts/neat-islands/` e importa campeoes das outras ilhas nas
+novas geracoes:
+
+```sh
+SMW_NEAT_POOL=scripts/smw-neat.pool.1.lua ./build/snes mario.sfc --script scripts/smw-neat-ai.lua
+SMW_NEAT_POOL=scripts/smw-neat.pool.2.lua ./build/snes mario.sfc --script scripts/smw-neat-ai.lua
+```
+
+Pressione `Tab` no frontend para ligar/desligar o turbo de treino. O HUD mostra
+`TAB 12x` quando a aceleracao estiver ativa. Tambem e possivel ajustar o tamanho
+da populacao com `SMW_NEAT_POP=64`, a pasta de merge com
+`SMW_NEAT_ISLAND_DIR=scripts/neat-islands` e quantos campeoes entram por geracao
+com `SMW_NEAT_MIGRANTS=4`. Use pools separados para evitar que duas instancias
+sobrescrevam o mesmo treino.
+Quando a versao interna do treino muda, pools antigos sao ignorados e o treino
+recomeca para evitar carregar uma populacao presa em um comportamento ruim.
+
 Fluxo recomendado para criar scripts:
 
 1. Rode o jogo com um arquivo Lua:
@@ -203,6 +256,10 @@ Fluxo recomendado para criar scripts:
 2. Pressione `-` na janela do emulador.
 3. Edite o script, usando `Tab` para completar `snes.*`.
 4. Pressione `Ctrl-R` para salvar e recarregar sem fechar o emulador.
+
+Tambem e possivel iniciar o emulador normalmente, pressionar `K`, escolher um
+arquivo `.lua` da lista interna e deixar o emulador copiar e carregar o script
+automaticamente.
 
 ## Controles
 
@@ -217,6 +274,7 @@ Fluxo recomendado para criar scripts:
 | Salvar / carregar estado | F5 / F8 |
 | Pausar | P |
 | Editor Lua | - |
+| Importar/carregar script Lua | K |
 | Debug do mapa de memória | I |
 | Tela cheia | F11 |
 | Sair | Esc |
