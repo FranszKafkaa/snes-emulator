@@ -8,6 +8,7 @@ namespace snes {
 
 struct LaunchOptions {
     std::filesystem::path rom_path{"mario.sfc"};
+    std::filesystem::path core_path{};
     std::filesystem::path watchlist_path{};
     std::filesystem::path script_path{};
     bool headless = false;

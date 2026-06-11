@@ -61,14 +61,32 @@ uint32_t memory_hash(std::span<const uint8_t> memory) {
   return hash;
 }
 
-const std::array<MemoryRegion, 3> memory_regions{{
+std::array<MemoryRegion, 3> memory_regions{{
     {"WRAM", RETRO_MEMORY_SYSTEM_RAM, 0x7E0000, "CPU 7E0000-7FFFFF"},
     {"VRAM", RETRO_MEMORY_VIDEO_RAM, 0x000000, "PPU 0000-FFFF"},
     {"SRAM", RETRO_MEMORY_SAVE_RAM, 0x700000, "CPU 700000+"},
 }};
 
+void configure_memory_regions(ConsoleSystem system) {
+  if (system == ConsoleSystem::N64) {
+    memory_regions = {{
+        {"RDRAM", RETRO_MEMORY_SYSTEM_RAM, 0x80000000U, "CPU 80000000+"},
+        {"VRAM", RETRO_MEMORY_VIDEO_RAM, 0x00000000U, "VIDEO 00000000+"},
+        {"SAVE", RETRO_MEMORY_SAVE_RAM, 0x00000000U, "SAVE 00000000+"},
+    }};
+    app.memory_editor.address_input = memory_regions[0].base;
+    return;
+  }
+  memory_regions = {{
+      {"WRAM", RETRO_MEMORY_SYSTEM_RAM, 0x7E0000, "CPU 7E0000-7FFFFF"},
+      {"VRAM", RETRO_MEMORY_VIDEO_RAM, 0x000000, "PPU 0000-FFFF"},
+      {"SRAM", RETRO_MEMORY_SAVE_RAM, 0x700000, "CPU 700000+"},
+  }};
+  app.memory_editor.address_input = memory_regions[0].base;
+}
+
 uint8_t *wram() {
-  return static_cast<uint8_t *>(retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM));
+  return static_cast<uint8_t *>(core.get_memory_data(RETRO_MEMORY_SYSTEM_RAM));
 }
 
 const MemoryRegion &selected_region() {
@@ -76,11 +94,11 @@ const MemoryRegion &selected_region() {
 }
 
 uint8_t *selected_memory() {
-  return static_cast<uint8_t *>(retro_get_memory_data(selected_region().id));
+  return static_cast<uint8_t *>(core.get_memory_data(selected_region().id));
 }
 
 size_t selected_memory_size() {
-  return retro_get_memory_size(selected_region().id);
+  return core.get_memory_size(selected_region().id);
 }
 
 bool checked_multiply(size_t left, size_t right, size_t &result) {
@@ -107,9 +125,19 @@ bool frame_layout(unsigned width, unsigned height, size_t pitch,
 
 bool resolve_memory_address(uint32_t address, unsigned &region_index,
                             size_t &offset) {
+  if (app.system == ConsoleSystem::N64) {
+    const size_t system_size = core.get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+    const uint32_t physical = address & 0x1fffffffU;
+    if (system_size && ((address >= 0x80000000U && physical < system_size) ||
+                        address < system_size)) {
+      region_index = 0;
+      offset = address < system_size ? address : physical;
+      return true;
+    }
+  }
   for (unsigned index = 0; index < memory_regions.size(); ++index) {
     const auto &region = memory_regions[index];
-    const size_t size = retro_get_memory_size(region.id);
+    const size_t size = core.get_memory_size(region.id);
     if (size && address >= region.base &&
         static_cast<uint64_t>(address - region.base) < size) {
       region_index = index;

@@ -412,7 +412,7 @@ void handle_events() {
         }
         switch (event.key.keysym.sym) {
         case SDLK_ESCAPE: app.running = false; break;
-        case SDLK_F2: retro_reset(); break;
+        case SDLK_F2: core.reset(); break;
         case SDLK_F5: save_state(); break;
         case SDLK_F8: load_state(); break;
         case SDLK_F11: {

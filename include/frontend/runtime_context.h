@@ -15,6 +15,7 @@ extern "C" {
 }
 
 #include "libretro.h"
+#include "emulator/libretro_core.h"
 #include "media_pipeline.h"
 #include "save_manager.h"
 
@@ -199,12 +200,20 @@ struct VideoFilterState {
 struct Frontend {
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
+    SDL_GLContext gl_context = nullptr;
     SDL_Texture *texture = nullptr;
     SDL_AudioDeviceID audio = 0;
     unsigned texture_width = 0;
     unsigned texture_height = 0;
     enum retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_RGB565;
+    ConsoleSystem system = ConsoleSystem::Unknown;
+    bool hardware_render = false;
+    bool hardware_context_ready = false;
+    retro_hw_render_callback hardware = {};
+    std::string core_assets_directory = "lib";
+    std::string system_directory = ".";
     std::string data_directory = ".";
+    std::string content_directory = ".";
     bool headless = false;
     bool running = true;
     bool paused = false;
@@ -238,10 +247,11 @@ struct MemoryRegion {
 };
 
 extern Frontend app;
+extern LibretroCore core;
 extern std::vector<uint8_t> rom;
 extern std::filesystem::path rom_path;
 extern std::unique_ptr<snes::SaveManager> save_manager;
-extern const std::array<MemoryRegion, 3> memory_regions;
+extern std::array<MemoryRegion, 3> memory_regions;
 
 void draw_text(int x, int y, const std::string &text, SDL_Color color, int scale = 2);
 bool window_fullscreen();
@@ -258,6 +268,7 @@ bool frame_layout(unsigned width, unsigned height, size_t pitch,
 bool resolve_memory_address(uint32_t address, unsigned &region_index, size_t &offset);
 std::string trim(std::string text);
 void load_memory_watchlist(const std::filesystem::path &path);
+void configure_memory_regions(ConsoleSystem system);
 bool focus_memory_address(uint32_t address);
 bool write_memory_address(uint32_t address, uint8_t value);
 bool save_current_state();
@@ -324,6 +335,8 @@ void save_sram();
 void save_state();
 void load_state();
 bool init_sdl(const retro_system_av_info &av);
+bool init_hardware_sdl();
+bool init_audio(const retro_system_av_info &av);
 
 void handle_events();
 

@@ -9,6 +9,7 @@ namespace snes {
 void print_usage(const char *program) {
     std::cout << "Uso: " << program
               << " [rom.sfc] [--headless] [--frames N]"
+                 " [--core core_libretro.dylib]"
                  " [--watchlist arquivo.txt] [--script arquivo.lua]\n";
 }
 
@@ -20,6 +21,8 @@ std::optional<LaunchOptions> parse_launch_options(int argc, char **argv) {
             options.headless = true;
         } else if (argument == "--frames" && index + 1 < argc) {
             options.frame_limit = std::strtoull(argv[++index], nullptr, 10);
+        } else if (argument == "--core" && index + 1 < argc) {
+            options.core_path = argv[++index];
         } else if ((argument == "--watchlist" ||
                     argument == "--memories") &&
                    index + 1 < argc) {

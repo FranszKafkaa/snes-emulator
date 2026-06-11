@@ -8,3 +8,6 @@ third_party/*
 *.log
 *.txt
 scripts/*
+*.z64
+*.n64
+

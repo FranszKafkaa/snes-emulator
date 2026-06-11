@@ -45,8 +45,8 @@ int lua_read8(lua_State *state) {
         return 1;
     }
     const auto *memory = static_cast<const uint8_t *>(
-        retro_get_memory_data(memory_regions[region].id));
-    const size_t size = retro_get_memory_size(memory_regions[region].id);
+        core.get_memory_data(memory_regions[region].id));
+    const size_t size = core.get_memory_size(memory_regions[region].id);
     if (!memory || offset >= size) {
         lua_pushnil(state);
         return 1;
@@ -74,8 +74,8 @@ int lua_read16(lua_State *state) {
         return 1;
     }
     const auto *memory = static_cast<const uint8_t *>(
-        retro_get_memory_data(memory_regions[region].id));
-    const size_t size = retro_get_memory_size(memory_regions[region].id);
+        core.get_memory_data(memory_regions[region].id));
+    const size_t size = core.get_memory_size(memory_regions[region].id);
     if (!memory || offset + 1 >= size) {
         lua_pushnil(state);
         return 1;

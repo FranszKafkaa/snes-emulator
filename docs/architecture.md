@@ -21,8 +21,14 @@ módulos próprios.
 - `src/debugger/memory_debugger.cpp`
   concentra debugger de memória, freeze/watch, correlação visual, preview de
   sprites e UI do painel.
+- `src/emulator/libretro_core.cpp`
+  carrega dinamicamente o core libretro escolhido, resolve os símbolos
+  `retro_*` por `dlopen`/`dlsym` e detecta o sistema a partir da extensão da
+  ROM ou de `--core`.
 - `src/emulator/libretro_host.cpp`
   concentra callbacks libretro, vídeo/áudio, save state, hash de frame e SDL.
+  Também responde diretórios/opções libretro e cria o contexto SDL/OpenGL
+  quando cores N64 solicitam `RETRO_ENVIRONMENT_SET_HW_RENDER`.
 
 ## Próximo corte
 

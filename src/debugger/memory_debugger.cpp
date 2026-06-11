@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
-#include <dlfcn.h>
 #include <span>
 #include <string>
 #include <utility>
@@ -23,7 +22,7 @@ bool write_memory_address(uint32_t address, uint8_t value) {
         return false;
     }
     auto *memory = static_cast<uint8_t *>(
-        retro_get_memory_data(memory_regions[region_index].id));
+        core.get_memory_data(memory_regions[region_index].id));
     if (!memory) {
         return false;
     }
@@ -241,9 +240,9 @@ void apply_memory_lock() {
         return;
     }
     auto *memory = static_cast<uint8_t *>(
-        retro_get_memory_data(memory_regions[editor.watch_region].id));
+        core.get_memory_data(memory_regions[editor.watch_region].id));
     const size_t size =
-        retro_get_memory_size(memory_regions[editor.watch_region].id);
+        core.get_memory_size(memory_regions[editor.watch_region].id);
     if (memory && editor.watch_offset < size) {
         memory[editor.watch_offset] = editor.watch_value;
     }
@@ -255,9 +254,9 @@ uint8_t current_watch_value() {
         return 0;
     }
     const auto *memory = static_cast<const uint8_t *>(
-        retro_get_memory_data(memory_regions[editor.watch_region].id));
+        core.get_memory_data(memory_regions[editor.watch_region].id));
     const size_t size =
-        retro_get_memory_size(memory_regions[editor.watch_region].id);
+        core.get_memory_size(memory_regions[editor.watch_region].id);
     return memory && editor.watch_offset < size
         ? memory[editor.watch_offset]
         : 0;
@@ -712,7 +711,7 @@ void track_memory_activity(const void *frame, unsigned width, unsigned height,
                            size_t pitch) {
     uint8_t *memory = wram();
     const size_t memory_size =
-        retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
+        core.get_memory_size(RETRO_MEMORY_SYSTEM_RAM);
     if (!memory || !memory_size || !frame) {
         return;
     }
@@ -844,13 +843,13 @@ SpriteSize sprite_size_pair(uint8_t select) {
 }
 
 CoreSPPU *core_ppu() {
-    static auto *ppu = [] {
-        if (void *symbol = dlsym(RTLD_DEFAULT, "PPU")) {
-            return reinterpret_cast<CoreSPPU *>(symbol);
-        }
-        return reinterpret_cast<CoreSPPU *>(dlsym(RTLD_DEFAULT, "_PPU"));
-    }();
-    return ppu;
+    if (app.system != ConsoleSystem::Snes) {
+        return nullptr;
+    }
+    if (void *symbol = core.symbol("PPU")) {
+        return reinterpret_cast<CoreSPPU *>(symbol);
+    }
+    return reinterpret_cast<CoreSPPU *>(core.symbol("_PPU"));
 }
 
 std::pair<int, int> sprite_dimensions(const CoreSOBJ &sprite) {
@@ -1041,14 +1040,14 @@ void draw_correlated_sprite_preview(int panel_x) {
     SDL_RenderDrawRect(app.renderer, &preview);
 
     const auto *vram = static_cast<const uint8_t *>(
-        retro_get_memory_data(RETRO_MEMORY_VIDEO_RAM));
+        core.get_memory_data(RETRO_MEMORY_VIDEO_RAM));
     const auto selection = select_oam_sprite(vram);
     if (!core_ppu()) {
         draw_text(preview.x + 12, preview.y + 60, "PPU NAO EXPORTADO",
                   SDL_Color{255, 120, 120, 255}, 1);
         return;
     }
-    if (!vram || retro_get_memory_size(RETRO_MEMORY_VIDEO_RAM) < 0x10000) {
+    if (!vram || core.get_memory_size(RETRO_MEMORY_VIDEO_RAM) < 0x10000) {
         draw_text(preview.x + 12, preview.y + 60, "VRAM INDISPONIVEL",
                   SDL_Color{255, 120, 120, 255}, 1);
         return;
@@ -1243,9 +1242,9 @@ void draw_memory_debugger() {
             const unsigned index = first + row;
             const auto &watch = app.custom_memory_watches[index];
             const auto *memory = static_cast<const uint8_t *>(
-                retro_get_memory_data(memory_regions[watch.region].id));
+                core.get_memory_data(memory_regions[watch.region].id));
             const size_t size =
-                retro_get_memory_size(memory_regions[watch.region].id);
+                core.get_memory_size(memory_regions[watch.region].id);
             const uint8_t value =
                 memory && watch.offset < size ? memory[watch.offset] : 0;
             char important_line[128];
@@ -1288,7 +1287,7 @@ void draw_memory_debugger() {
                           0x7E0000U + static_cast<unsigned>(offset),
                           wram_memory &&
                                   offset <
-                                      retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM)
+                                      core.get_memory_size(RETRO_MEMORY_SYSTEM_RAM)
                               ? wram_memory[offset]
                               : 0,
                           score);

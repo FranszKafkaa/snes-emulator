@@ -1,7 +1,11 @@
-# Emulador SNES em C++
+# Frontend libretro em C++
 
-Frontend C++/SDL2 para o núcleo Snes9x via API libretro. O projeto inclui o
-núcleo compilado para macOS Apple Silicon e usa `mario.sfc` como ROM padrão.
+Frontend C++/SDL2 para cores libretro. O projeto inclui o núcleo Snes9x para
+macOS Apple Silicon e usa `mario.sfc` como ROM padrão, mas também seleciona
+cores por sistema em runtime. ROMs de Nintendo 64 (`.z64`, `.n64`, `.v64`,
+`.ndd`) usam por padrão `lib/mupen64plus_next_libretro.dylib` ou
+`lib/parallel_n64_libretro.dylib` quando um desses arquivos existe. Os dois
+cores N64 arm64 oficiais do Libretro ficam instalados em `lib/`.
 
 ## Compilar e executar
 
@@ -19,6 +23,26 @@ Também é possível abrir outra ROM:
 ```sh
 ./build/snes caminho/jogo.sfc
 ```
+
+Para usar Nintendo 64, basta abrir a ROM. O frontend detecta a extensão e usa o
+core N64 padrão:
+
+```sh
+./build/snes caminho/jogo.z64
+```
+
+Se quiser forçar outro core:
+
+```sh
+./build/snes caminho/jogo.n64 --core lib/parallel_n64_libretro.dylib
+```
+
+O frontend carrega cores via `dlopen`, passa diretórios de save/assets/content,
+respeita cores que exigem `need_fullpath`, responde às opções libretro com os
+defaults informados pelo core e cria um contexto SDL/OpenGL quando o core pede
+`RETRO_ENVIRONMENT_SET_HW_RENDER`. Overlays/debugger desenhados por SDL seguem
+disponíveis no caminho de renderização por software; no modo OpenGL, o foco é o
+jogo renderizado pelo core e o input.
 
 Também é possível fornecer uma lista opcional de memórias para vigiar:
 

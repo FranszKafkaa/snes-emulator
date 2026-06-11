@@ -3,6 +3,7 @@
 namespace snes::frontend {
 
 Frontend app;
+LibretroCore core;
 std::vector<uint8_t> rom;
 std::filesystem::path rom_path;
 std::unique_ptr<snes::SaveManager> save_manager;
