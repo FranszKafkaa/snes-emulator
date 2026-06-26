@@ -103,6 +103,8 @@ void open_lua_script_picker() {
     }
     app.memory_editor.active = false;
     app.memory_editor.goto_popup = false;
+    app.memory_editor.search_popup = false;
+    app.memory_editor.name_popup = false;
     app.script_import.active = true;
     SDL_StopTextInput();
     refresh_script_picker_list();

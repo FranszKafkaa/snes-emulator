@@ -15,6 +15,7 @@ extern "C" {
 }
 
 #include "libretro.h"
+#include "emulator/libretro_core.h"
 #include "media_pipeline.h"
 #include "save_manager.h"
 
@@ -23,6 +24,13 @@ namespace snes::frontend {
 inline constexpr int game_width = 1024;
 inline constexpr int game_height = 768;
 inline constexpr int debugger_width = 512;
+
+enum class MemoryValueKind : uint8_t { U8, S8, BE16, LE16, BE32, LE32 };
+
+struct MemoryValueSearchResult {
+    size_t offset = 0;
+    MemoryValueKind kind = MemoryValueKind::U8;
+};
 
 struct MemoryEditor {
     unsigned region = 0;
@@ -50,6 +58,14 @@ struct MemoryEditor {
     bool goto_has_address = false;
     uint32_t goto_address = 0x7E0000;
     uint8_t goto_value = 0;
+    bool search_popup = false;
+    std::string search_query;
+    bool name_popup = false;
+    std::string name_query;
+    bool value_search_active = false;
+    unsigned value_search_region = 0;
+    int64_t value_search_last_value = 0;
+    std::vector<MemoryValueSearchResult> value_search_results;
     std::string status = "E PARA EDITAR";
 };
 
@@ -70,8 +86,12 @@ struct MemoryActivity {
     std::vector<VisualCorrelation> correlations;
     std::vector<uint8_t> previous_frame;
     std::array<size_t, 10> hottest{};
+    size_t scan_cursor = 0;
+    size_t hottest_scan_cursor = 0;
     size_t player_candidate_offset = 0;
     uint32_t player_candidate_score = 0;
+    uint32_t player_struct_score = 0;
+    uint16_t player_struct_stability = 0;
     unsigned frame_width = 0;
     unsigned frame_height = 0;
     uint64_t frames = 0;
@@ -133,9 +153,19 @@ struct CoreSPPU {
 };
 
 struct CustomMemoryWatch {
+    enum class ValueType { U8, S8, U16, S16, U32, S32, F32, BE16, BE32 };
+    enum class TriggerKind { None, Change, Eq, Ne, Gt, Lt };
+
     uint32_t address = 0;
     unsigned region = 0;
     size_t offset = 0;
+    ValueType type = ValueType::U8;
+    TriggerKind trigger = TriggerKind::None;
+    int64_t trigger_value = 0;
+    uint64_t last_value = 0;
+    bool has_last_value = false;
+    bool trigger_latched = false;
+    bool trigger_pause = true;
     std::string label;
 };
 
@@ -182,7 +212,10 @@ struct ScriptImportPrompt {
 
 enum class VideoFilterKind {
     Sharp,
+    Pretty,
     Smooth,
+    Fsr,
+    Fsr3,
     Scanlines,
     Crt,
     LcdGrid,
@@ -193,18 +226,32 @@ enum class VideoFilterKind {
 struct VideoFilterState {
     VideoFilterKind current = VideoFilterKind::Sharp;
     VideoFilterKind selected = VideoFilterKind::Sharp;
+    int sharpness = 35;
     bool menu_active = false;
 };
 
 struct Frontend {
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
+    SDL_GLContext gl_context = nullptr;
     SDL_Texture *texture = nullptr;
     SDL_AudioDeviceID audio = 0;
+    int audio_sample_rate = 0;
     unsigned texture_width = 0;
     unsigned texture_height = 0;
     enum retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_RGB565;
+    ConsoleSystem system = ConsoleSystem::Unknown;
+    bool hardware_render = false;
+    bool hardware_context_ready = false;
+    bool n64_gliden64 = false;
+    bool n64_widescreen = false;
+    bool n64_fast = false;
+    bool n64_fullspeed = false;
+    retro_hw_render_callback hardware = {};
+    std::string core_assets_directory = "lib";
+    std::string system_directory = ".";
     std::string data_directory = ".";
+    std::string content_directory = ".";
     bool headless = false;
     bool running = true;
     bool paused = false;
@@ -238,14 +285,16 @@ struct MemoryRegion {
 };
 
 extern Frontend app;
+extern LibretroCore core;
 extern std::vector<uint8_t> rom;
 extern std::filesystem::path rom_path;
 extern std::unique_ptr<snes::SaveManager> save_manager;
-extern const std::array<MemoryRegion, 3> memory_regions;
+extern std::array<MemoryRegion, 3> memory_regions;
 
 void draw_text(int x, int y, const std::string &text, SDL_Color color, int scale = 2);
 bool window_fullscreen();
 int render_logical_width();
+int game_logical_width();
 void apply_stretched_render_scale();
 int effective_speed_multiplier();
 uint32_t memory_hash(std::span<const uint8_t> memory);
@@ -258,6 +307,7 @@ bool frame_layout(unsigned width, unsigned height, size_t pitch,
 bool resolve_memory_address(uint32_t address, unsigned &region_index, size_t &offset);
 std::string trim(std::string text);
 void load_memory_watchlist(const std::filesystem::path &path);
+void configure_memory_regions(ConsoleSystem system);
 bool focus_memory_address(uint32_t address);
 bool write_memory_address(uint32_t address, uint8_t value);
 bool save_current_state();
@@ -276,9 +326,11 @@ void run_lua_frame();
 
 const char *video_filter_name(VideoFilterKind filter);
 void apply_video_filter_to_texture();
+bool update_video_filter_texture(const snes::VideoFrame &frame);
 void draw_video_filter_overlay();
 void open_video_filter_menu();
 bool handle_video_filter_menu_key(SDL_Keycode key);
+bool adjust_video_filter_sharpness(int delta);
 void draw_video_filter_menu();
 
 void clamp_editor_address();
@@ -289,10 +341,17 @@ void set_text_editor_enabled(bool enabled);
 void toggle_text_editor();
 void write_text_to_memory(const char *text);
 bool read_selected_memory_value(uint8_t &value);
+bool focus_debug_search_result(const std::string &query);
+bool save_debug_field_name(const std::string &name);
+void open_memory_search_popup();
+bool handle_memory_search_popup_key(SDL_Keycode key);
+void open_memory_name_popup();
+bool handle_memory_name_popup_key(SDL_Keycode key);
 void toggle_memory_freeze();
 void clear_memory_freeze();
 void adjust_selected_memory_value(int delta);
 void apply_memory_lock();
+void evaluate_memory_triggers();
 uint8_t current_watch_value();
 uint32_t memory_address(unsigned region, size_t offset);
 const CustomMemoryWatch *memory_watch_for(unsigned region, size_t offset);
@@ -314,6 +373,7 @@ void update_hash(const void *data, unsigned width, unsigned height, size_t pitch
 void start_media_workers();
 void stop_media_workers();
 void video_refresh(const void *data, unsigned width, unsigned height, size_t pitch);
+void prepare_hardware_frame();
 void present_latest_frame();
 size_t audio_batch(const int16_t *data, size_t frames);
 void audio_sample(int16_t left, int16_t right);
@@ -324,6 +384,8 @@ void save_sram();
 void save_state();
 void load_state();
 bool init_sdl(const retro_system_av_info &av);
+bool init_hardware_sdl();
+bool init_audio(const retro_system_av_info &av);
 
 void handle_events();
 

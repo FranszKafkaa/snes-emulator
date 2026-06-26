@@ -45,8 +45,8 @@ int lua_read8(lua_State *state) {
         return 1;
     }
     const auto *memory = static_cast<const uint8_t *>(
-        retro_get_memory_data(memory_regions[region].id));
-    const size_t size = retro_get_memory_size(memory_regions[region].id);
+        core.get_memory_data(memory_regions[region].id));
+    const size_t size = core.get_memory_size(memory_regions[region].id);
     if (!memory || offset >= size) {
         lua_pushnil(state);
         return 1;
@@ -74,8 +74,8 @@ int lua_read16(lua_State *state) {
         return 1;
     }
     const auto *memory = static_cast<const uint8_t *>(
-        retro_get_memory_data(memory_regions[region].id));
-    const size_t size = retro_get_memory_size(memory_regions[region].id);
+        core.get_memory_data(memory_regions[region].id));
+    const size_t size = core.get_memory_size(memory_regions[region].id);
     if (!memory || offset + 1 >= size) {
         lua_pushnil(state);
         return 1;
@@ -345,6 +345,8 @@ void open_script_editor() {
     }
     app.memory_editor.active = false;
     app.memory_editor.goto_popup = false;
+    app.memory_editor.search_popup = false;
+    app.memory_editor.name_popup = false;
     const auto editor_path =
         (std::filesystem::current_path() / "build/snes-lua-editor").string();
     const auto script_path = std::filesystem::absolute(editor.path).string();
@@ -372,6 +374,8 @@ void import_lua_script_from_path(const std::filesystem::path &selected_path) {
     }
     app.memory_editor.active = false;
     app.memory_editor.goto_popup = false;
+    app.memory_editor.search_popup = false;
+    app.memory_editor.name_popup = false;
 
     if (selected_path.empty()) {
         editor.status = "IMPORTACAO DE SCRIPT CANCELADA";

@@ -44,7 +44,7 @@ private:
 
 class AudioPipeline {
 public:
-    explicit AudioPipeline(SDL_AudioDeviceID device);
+    AudioPipeline(SDL_AudioDeviceID device, int sample_rate);
     ~AudioPipeline();
 
     AudioPipeline(const AudioPipeline &) = delete;
@@ -53,6 +53,7 @@ public:
     void start();
     void stop();
     void submit(std::span<const int16_t> samples);
+    uint32_t queued_milliseconds() const;
 
 private:
     class Impl;
