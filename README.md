@@ -25,7 +25,7 @@ Também é possível abrir outra ROM:
 ```
 
 Para usar Nintendo 64, basta abrir a ROM. O frontend detecta a extensão e usa o
-core N64 padrão:
+caminho padrão estável do Mupen64Plus-Next:
 
 ```sh
 ./build/snes caminho/jogo.z64
@@ -36,6 +36,33 @@ Se quiser forçar outro core:
 ```sh
 ./build/snes caminho/jogo.n64 --core lib/parallel_n64_libretro.dylib
 ```
+
+Opções úteis do renderer N64:
+
+```sh
+./build/snes caminho/jogo.z64 --n64-gliden64
+./build/snes caminho/jogo.z64 --n64-widescreen
+./build/snes caminho/jogo.z64 --n64-fast
+```
+
+`--n64-widescreen` seleciona GLideN64 e aplica o aspecto `16:9 adjusted` com
+viewport `960x540`.
+
+`--n64-fast` usa GLideN64 em resolução menor. Para GoldenEye/007, teste:
+
+```sh
+./build/snes caminho/GoldenEye.z64 --n64-fast
+```
+
+Se ainda parecer lento porque o próprio jogo roda com framerate baixo no
+hardware original, teste explicitamente:
+
+```sh
+./build/snes caminho/GoldenEye.z64 --n64-fullspeed
+```
+
+`--n64-fullspeed` altera timing (`Framerate=Fullspeed`/CountPerOp) e pode
+melhorar sensação de velocidade, mas tem maior risco de bugs de compatibilidade.
 
 O frontend carrega cores via `dlopen`, passa diretórios de save/assets/content,
 respeita cores que exigem `need_fullpath`, responde às opções libretro com os
@@ -54,14 +81,22 @@ Formato do arquivo:
 
 ```txt
 7E0019 Player X
-$7E001A Player Y
-0x7E0DB3 Vida
+$7E001A s8 Player Y
+0x7E0DB3 u16 Vida
+$7E1490 u8 trigger=change Timer
+$7E0019 u8 trigger=eq:$00 Player X zerou
 ```
 
-Linhas vazias e comentários iniciados por `#` são ignorados. Quando esse
-arquivo é fornecido, o painel de debug mostra essas labels no lugar da lista
-automática; `[` e `]` selecionam a memória e o marcador discreto representa a
-memória selecionada no jogo quando houver correlação visual forte para ela.
+Linhas vazias e comentários iniciados por `#` são ignorados. O tipo é opcional;
+quando omitido, o watch usa `u8`. Tipos aceitos: `u8`, `s8`, `u16`, `s16`,
+`u32`, `s32`, `f32`, `be16` e `be32`. Triggers opcionais usam
+`trigger=change`, `trigger=eq:$NN`, `trigger=ne:$NN`, `trigger=gt:$NN` ou
+`trigger=lt:$NN`; quando disparam, registram log e pausam a emulação.
+
+Quando esse arquivo é fornecido, o painel de debug mostra essas labels no lugar
+da lista automática; `[` e `]` selecionam a memória e o marcador discreto
+representa a memória selecionada no jogo quando houver correlação visual forte
+para ela.
 
 ## Scripting Lua
 

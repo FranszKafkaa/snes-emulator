@@ -12,6 +12,11 @@ struct LaunchOptions {
     std::filesystem::path watchlist_path{};
     std::filesystem::path script_path{};
     bool headless = false;
+    bool n64_gliden64 = false;
+    bool n64_widescreen = false;
+    bool n64_fast = false;
+    bool n64_fullspeed = false;
+    bool n64_accurate = false;
     uint64_t frame_limit = 0;
 };
 

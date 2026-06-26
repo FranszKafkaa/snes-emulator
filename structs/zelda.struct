@@ -1,0 +1,38 @@
+# Player struct signature for The Legend of Zelda: Ocarina of Time.
+# Simple key=value format. Numbers accept decimal or 0x-prefixed hex.
+
+name=Zelda Ocarina of Time - Link actor/player
+
+# Link actor id in OoT actor structs.
+actor_id=0x0000
+actor_id_offset=0x0000
+
+# Minimum struct span the scanner needs to validate.
+struct_size=0x0180
+
+# Actor world coordinates.
+pos_x=0x0024
+pos_y=0x0028
+pos_z=0x002c
+
+# Actor rotation/angles.
+rot_x=0x0030
+rot_y=0x0032
+rot_z=0x0034
+
+# Runtime velocity-ish fields used only as plausibility checks.
+vel_x=0x005c
+vel_y=0x0060
+vel_z=0x0064
+
+# Actor linked-list neighbors.
+prev=0x0118
+next=0x011c
+
+# Actor behavior callbacks.
+update_fn=0x0130
+draw_fn=0x0134
+
+# Heap window where actors usually live in our RDRAM view.
+heap_min=0x100000
+heap_max=0x500000

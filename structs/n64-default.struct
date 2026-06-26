@@ -1,0 +1,22 @@
+# Generic N64 actor-style signature.
+# Used when no ROM-specific profile exists.
+
+name=Generic N64 actor/player
+actor_id=any
+actor_id_offset=0x0000
+struct_size=0x0180
+pos_x=0x0024
+pos_y=0x0028
+pos_z=0x002c
+rot_x=0x0030
+rot_y=0x0032
+rot_z=0x0034
+vel_x=0x005c
+vel_y=0x0060
+vel_z=0x0064
+prev=0x0118
+next=0x011c
+update_fn=0x0130
+draw_fn=0x0134
+heap_min=0x100000
+heap_max=0x500000

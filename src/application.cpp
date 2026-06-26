@@ -1,18 +1,61 @@
 #include <algorithm>
 #include <chrono>
+#include <cctype>
+#include <csignal>
+#include <cstdlib>
+#include <execinfo.h>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
+#include <unistd.h>
+#include <sys/ucontext.h>
 
 #include "application.h"
 #include "frontend/runtime_context.h"
 #include "launch_options.h"
 #include "libretro.h"
 
+namespace {
+
+void crash_handler(int signal, siginfo_t *, void *context) {
+    void *frames[64];
+    const int frame_count = backtrace(frames, 64);
+    std::cerr << "\nCrash capturado: sinal " << signal
+              << ". Backtrace:\n";
+#if defined(__APPLE__) && defined(__aarch64__)
+    if (context) {
+        const auto *ucontext = static_cast<ucontext_t *>(context);
+        const auto &state = ucontext->uc_mcontext->__ss;
+        std::cerr << "pc=0x" << std::hex << state.__pc
+                  << " lr=0x" << state.__lr
+                  << " x8=0x" << state.__x[8]
+                  << " x22=0x" << state.__x[22]
+                  << std::dec << '\n';
+    }
+#endif
+    backtrace_symbols_fd(frames, frame_count, STDERR_FILENO);
+    std::_Exit(128 + signal);
+}
+
+void install_crash_handler() {
+    struct sigaction action {};
+    action.sa_sigaction = crash_handler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_SIGINFO;
+    sigaction(SIGSEGV, &action, nullptr);
+    sigaction(SIGBUS, &action, nullptr);
+    sigaction(SIGILL, &action, nullptr);
+    sigaction(SIGABRT, &action, nullptr);
+}
+
+} // namespace
+
 int snes::Application::run(int argc, char **argv) {
     using namespace snes::frontend;
+
+    install_crash_handler();
 
     const auto options = parse_launch_options(argc, argv);
     if (!options) return 0;
@@ -43,6 +86,16 @@ int snes::Application::run(int argc, char **argv) {
         : options->script_path;
     app.headless = options->headless;
     save_manager = std::make_unique<SaveManager>(rom_path);
+    const bool n64_hardware_allowed =
+        app.system == ConsoleSystem::N64 && !app.headless &&
+        !options->n64_accurate;
+    app.n64_fast = n64_hardware_allowed && options->n64_fast;
+    app.n64_fullspeed =
+        app.system == ConsoleSystem::N64 && options->n64_fullspeed;
+    app.n64_gliden64 =
+        n64_hardware_allowed &&
+        (options->n64_gliden64 || options->n64_widescreen || options->n64_fast);
+    app.n64_widescreen = n64_hardware_allowed && options->n64_widescreen;
     app.data_directory =
         std::filesystem::absolute(rom_path).parent_path().string();
     app.content_directory = app.data_directory;
@@ -99,6 +152,12 @@ int snes::Application::run(int argc, char **argv) {
         core.deinit();
         return 1;
     }
+    // GLideN64 must see context_reset() after retro_load_game(), otherwise
+    // Mupen64Plus-Next leaves gfx.PluginStartup null and crashes in main_run.
+    if (app.n64_gliden64 && app.hardware.context_reset &&
+        app.hardware_context_ready) {
+        app.hardware.context_reset();
+    }
     load_sram();
     load_memory_watchlist(options->watchlist_path);
     load_lua_script(options->script_path);
@@ -133,6 +192,7 @@ int snes::Application::run(int argc, char **argv) {
     const auto frame_duration =
         std::chrono::duration<double>(1.0 / av.timing.fps);
     auto next_frame = std::chrono::steady_clock::now();
+    unsigned audio_refill_frames = 0;
     uint64_t frames = 0;
     while (app.running && (!frame_limit || frames < frame_limit)) {
         if (!app.headless) {
@@ -150,9 +210,10 @@ int snes::Application::run(int argc, char **argv) {
                 run_lua_frame();
                 apply_memory_lock();
                 if (app.hardware_render && app.gl_context) {
-                    SDL_GL_MakeCurrent(app.window, app.gl_context);
+                    prepare_hardware_frame();
                 }
                 core.run();
+                evaluate_memory_triggers();
                 ++frames;
                 ++app.lua.frame;
             }
@@ -160,6 +221,21 @@ int snes::Application::run(int argc, char **argv) {
         if (!app.headless) {
             present_latest_frame();
             if (effective_speed_multiplier() <= 1) {
+                const bool audio_needs_buffer =
+                    app.audio_pipeline &&
+                    app.audio_pipeline->queued_milliseconds() < 120;
+                if (audio_needs_buffer && audio_refill_frames < 12) {
+                    ++audio_refill_frames;
+                    next_frame = std::chrono::steady_clock::now();
+                    continue;
+                }
+                if (!audio_needs_buffer) {
+                    audio_refill_frames = 0;
+                }
+                const auto now = std::chrono::steady_clock::now();
+                if (next_frame + frame_duration < now) {
+                    next_frame = now;
+                }
                 next_frame +=
                     std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                         frame_duration);
@@ -182,12 +258,23 @@ int snes::Application::run(int argc, char **argv) {
         app.lua.state = nullptr;
         app.lua.active = false;
     }
-    core.unload_game();
-    core.deinit();
-    if (app.audio) SDL_CloseAudioDevice(app.audio);
+    if (app.hardware_render && app.gl_context) {
+        SDL_GL_MakeCurrent(app.window, app.gl_context);
+    }
     if (app.hardware.context_destroy && app.hardware_context_ready) {
         app.hardware.context_destroy();
+        app.hardware_context_ready = false;
     }
+    const bool skip_hardware_unload =
+        app.system == ConsoleSystem::N64 && app.hardware_render;
+    if (skip_hardware_unload) {
+        std::cerr << "[core] pulando retro_unload_game no N64/OpenGL "
+                     "para evitar crash no shutdown do plugin.\n";
+    } else {
+        core.unload_game();
+    }
+    core.deinit();
+    if (app.audio) SDL_CloseAudioDevice(app.audio);
     SDL_DestroyTexture(app.texture);
     SDL_DestroyRenderer(app.renderer);
     if (app.gl_context) {
@@ -195,6 +282,12 @@ int snes::Application::run(int argc, char **argv) {
     }
     SDL_DestroyWindow(app.window);
     SDL_Quit();
+
+    if (skip_hardware_unload) {
+        std::cout.flush();
+        std::cerr.flush();
+        std::_Exit(0);
+    }
 
     if (app.headless) {
         std::cout << "Teste concluido: " << frames

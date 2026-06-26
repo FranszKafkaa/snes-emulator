@@ -10,6 +10,8 @@ void print_usage(const char *program) {
     std::cout << "Uso: " << program
               << " [rom.sfc] [--headless] [--frames N]"
                  " [--core core_libretro.dylib]"
+                 " [--n64-gliden64] [--n64-widescreen]"
+                 " [--n64-fast] [--n64-fullspeed] [--n64-accurate]"
                  " [--watchlist arquivo.txt] [--script arquivo.lua]\n";
 }
 
@@ -19,6 +21,16 @@ std::optional<LaunchOptions> parse_launch_options(int argc, char **argv) {
         const std::string argument = argv[index];
         if (argument == "--headless") {
             options.headless = true;
+        } else if (argument == "--n64-gliden64") {
+            options.n64_gliden64 = true;
+        } else if (argument == "--n64-widescreen") {
+            options.n64_widescreen = true;
+        } else if (argument == "--n64-fast") {
+            options.n64_fast = true;
+        } else if (argument == "--n64-fullspeed") {
+            options.n64_fullspeed = true;
+        } else if (argument == "--n64-accurate") {
+            options.n64_accurate = true;
         } else if (argument == "--frames" && index + 1 < argc) {
             options.frame_limit = std::strtoull(argv[++index], nullptr, 10);
         } else if (argument == "--core" && index + 1 < argc) {

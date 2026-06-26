@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cctype>
+#include <cstdio>
+#include <limits>
 #include <string>
+#include <utility>
 
 namespace snes::frontend {
 
@@ -31,10 +35,374 @@ void open_goto_popup() {
         editor.goto_value = editor.value;
     }
     editor.goto_popup = true;
+    editor.search_popup = false;
+    editor.name_popup = false;
     editor.goto_editing_value = false;
     editor.goto_replace_on_type = true;
     editor.active = false;
     editor.status = "G ABERTO";
+}
+
+std::string search_lower(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return text;
+}
+
+bool contains_search_text(const std::string &text,
+                          const std::string &query) {
+    return search_lower(text).find(query) != std::string::npos;
+}
+
+const char *value_kind_name(MemoryValueKind kind) {
+    switch (kind) {
+    case MemoryValueKind::U8: return "u8";
+    case MemoryValueKind::S8: return "s8";
+    case MemoryValueKind::BE16: return "be16";
+    case MemoryValueKind::LE16: return "le16";
+    case MemoryValueKind::BE32: return "be32";
+    case MemoryValueKind::LE32: return "le32";
+    }
+    return "u8";
+}
+
+void focus_search_result(unsigned region, size_t offset,
+                         const std::string &status) {
+    auto &editor = app.memory_editor;
+    editor.region = region % memory_regions.size();
+    editor.offset = offset;
+    clamp_editor_address();
+    editor.address_input =
+        selected_region().base + static_cast<uint32_t>(editor.offset);
+    editor.address_valid = true;
+    if (auto *memory = selected_memory();
+        memory && editor.offset < selected_memory_size()) {
+        editor.value = memory[editor.offset];
+    }
+    editor.status = status;
+}
+
+bool parse_decimal_search_value(const std::string &query, int64_t &value) {
+    const std::string text = trim(query);
+    if (text.empty()) {
+        return false;
+    }
+    size_t index = 0;
+    if (text[index] == '-' || text[index] == '+') {
+        ++index;
+    }
+    if (index >= text.size()) {
+        return false;
+    }
+    for (; index < text.size(); ++index) {
+        if (!std::isdigit(static_cast<unsigned char>(text[index]))) {
+            return false;
+        }
+    }
+    try {
+        size_t consumed = 0;
+        value = std::stoll(text, &consumed, 10);
+        return consumed == text.size();
+    } catch (...) {
+        return false;
+    }
+}
+
+uint32_t read_le_value(const uint8_t *memory, size_t size, size_t offset,
+                       size_t bytes) {
+    if (!memory || offset + bytes > size) {
+        return 0;
+    }
+    uint32_t value = 0;
+    for (size_t index = 0; index < bytes; ++index) {
+        value |= static_cast<uint32_t>(memory[offset + index]) << (index * 8U);
+    }
+    return value;
+}
+
+uint32_t read_be_value(const uint8_t *memory, size_t size, size_t offset,
+                       size_t bytes) {
+    if (!memory || offset + bytes > size) {
+        return 0;
+    }
+    uint32_t value = 0;
+    for (size_t index = 0; index < bytes; ++index) {
+        value = (value << 8U) | memory[offset + index];
+    }
+    return value;
+}
+
+bool memory_value_matches(const uint8_t *memory, size_t size, size_t offset,
+                          MemoryValueKind kind, int64_t target) {
+    switch (kind) {
+    case MemoryValueKind::U8:
+        return target >= 0 && target <= 0xff &&
+               offset < size && memory[offset] == target;
+    case MemoryValueKind::S8:
+        return target >= -128 && target <= 127 &&
+               offset < size && static_cast<int8_t>(memory[offset]) == target;
+    case MemoryValueKind::BE16:
+        return target >= 0 && target <= 0xffff &&
+               read_be_value(memory, size, offset, 2) == target;
+    case MemoryValueKind::LE16:
+        return target >= 0 && target <= 0xffff &&
+               read_le_value(memory, size, offset, 2) == target;
+    case MemoryValueKind::BE32:
+        return target >= 0 && target <= std::numeric_limits<uint32_t>::max() &&
+               read_be_value(memory, size, offset, 4) ==
+                   static_cast<uint32_t>(target);
+    case MemoryValueKind::LE32:
+        return target >= 0 && target <= std::numeric_limits<uint32_t>::max() &&
+               read_le_value(memory, size, offset, 4) ==
+                   static_cast<uint32_t>(target);
+    }
+    return false;
+}
+
+void add_value_search_match(std::vector<MemoryValueSearchResult> &results,
+                            const uint8_t *memory, size_t size, size_t offset,
+                            int64_t target) {
+    constexpr size_t max_results = 200000;
+    const MemoryValueKind kinds[] = {
+        MemoryValueKind::U8, MemoryValueKind::S8,
+        MemoryValueKind::BE16, MemoryValueKind::LE16,
+        MemoryValueKind::BE32, MemoryValueKind::LE32,
+    };
+    for (MemoryValueKind kind : kinds) {
+        if (results.size() >= max_results) {
+            return;
+        }
+        if (memory_value_matches(memory, size, offset, kind, target)) {
+            results.push_back(MemoryValueSearchResult{offset, kind});
+        }
+    }
+}
+
+bool find_numeric_memory_value(int64_t target) {
+    auto &editor = app.memory_editor;
+    const auto *memory = selected_memory();
+    const size_t size = selected_memory_size();
+    if (!memory || !size) {
+        editor.status = "REGIAO INDISPONIVEL";
+        return false;
+    }
+
+    const unsigned region = editor.region;
+    std::vector<MemoryValueSearchResult> results;
+    if (editor.value_search_active &&
+        editor.value_search_region == region &&
+        !editor.value_search_results.empty()) {
+        results.reserve(editor.value_search_results.size());
+        for (const auto &candidate : editor.value_search_results) {
+            if (memory_value_matches(memory, size, candidate.offset,
+                                     candidate.kind, target)) {
+                results.push_back(candidate);
+            }
+        }
+    } else {
+        for (size_t offset = 0; offset < size; ++offset) {
+            add_value_search_match(results, memory, size, offset, target);
+            if (results.size() >= 200000) {
+                break;
+            }
+        }
+    }
+
+    editor.value_search_active = true;
+    editor.value_search_region = region;
+    editor.value_search_last_value = target;
+    editor.value_search_results = std::move(results);
+
+    if (editor.value_search_results.empty()) {
+        editor.status = "VALOR SEM RESULTADO";
+        return false;
+    }
+
+    const auto &first = editor.value_search_results.front();
+    char status[128];
+    std::snprintf(status, sizeof(status), "VALOR %lld: %zu CAND %s",
+                  static_cast<long long>(target),
+                  editor.value_search_results.size(),
+                  value_kind_name(first.kind));
+    focus_search_result(region, first.offset, status);
+    return true;
+}
+
+bool find_named_memory(const std::string &query) {
+    auto &editor = app.memory_editor;
+    if (query.empty()) {
+        editor.status = "DIGITE TEXTO PARA BUSCAR";
+        return false;
+    }
+
+    int64_t numeric_value = 0;
+    if (parse_decimal_search_value(editor.search_query, numeric_value)) {
+        return find_numeric_memory_value(numeric_value);
+    }
+
+    if (focus_debug_search_result(editor.search_query)) {
+        return true;
+    }
+
+    const auto *memory = selected_memory();
+    const size_t size = selected_memory_size();
+    if (!memory || !size) {
+        editor.status = "REGIAO INDISPONIVEL";
+        return false;
+    }
+    const std::string needle = editor.search_query;
+    if (needle.empty()) {
+        editor.status = "DIGITE TEXTO PARA BUSCAR";
+        return false;
+    }
+    const size_t start = editor.offset < size ? editor.offset + 1 : 0;
+    for (size_t step = 0; step < size; ++step) {
+        const size_t offset = (start + step) % size;
+        if (offset + needle.size() > size) {
+            continue;
+        }
+        bool match = true;
+        for (size_t index = 0; index < needle.size(); ++index) {
+            const auto left = static_cast<unsigned char>(memory[offset + index]);
+            const auto right = static_cast<unsigned char>(needle[index]);
+            if (std::tolower(left) != std::tolower(right)) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            char status[96];
+            std::snprintf(status, sizeof(status), "TEXTO EM $%06X",
+                          selected_region().base +
+                              static_cast<uint32_t>(offset));
+            focus_search_result(editor.region, offset, status);
+            return true;
+        }
+    }
+    editor.status = "BUSCA SEM RESULTADO";
+    return false;
+}
+
+void open_memory_search_popup() {
+    auto &editor = app.memory_editor;
+    if (!app.memory_debug) {
+        app.memory_debug = true;
+        set_debug_layout(true);
+    }
+    if (editor.text_mode) {
+        set_text_editor_enabled(false);
+    }
+    editor.search_popup = true;
+    editor.search_query.clear();
+    editor.active = false;
+    editor.goto_popup = false;
+    editor.name_popup = false;
+    editor.status = "BUSCA POR TEXTO";
+    SDL_StartTextInput();
+}
+
+void append_memory_search_text(const char *text) {
+    auto &editor = app.memory_editor;
+    if (!editor.search_popup || !text) {
+        return;
+    }
+    editor.search_query += text;
+    editor.status = "ENTER BUSCA";
+}
+
+bool handle_memory_search_popup_key(SDL_Keycode key) {
+    auto &editor = app.memory_editor;
+    if (!editor.search_popup) {
+        return false;
+    }
+    if (key == SDLK_ESCAPE) {
+        editor.search_popup = false;
+        editor.status = "BUSCA FECHADA";
+        if (!editor.text_mode) {
+            SDL_StopTextInput();
+        }
+        return true;
+    }
+    if (key == SDLK_BACKSPACE) {
+        if (!editor.search_query.empty()) {
+            editor.search_query.pop_back();
+        }
+        return true;
+    }
+    if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+        find_named_memory(search_lower(editor.search_query));
+        editor.search_popup = false;
+        if (!editor.text_mode) {
+            SDL_StopTextInput();
+        }
+        return true;
+    }
+    if (key == SDLK_SPACE) {
+        editor.search_query += ' ';
+    }
+    return true;
+}
+
+void open_memory_name_popup() {
+    auto &editor = app.memory_editor;
+    if (!app.memory_debug) {
+        app.memory_debug = true;
+        set_debug_layout(true);
+    }
+    if (editor.text_mode) {
+        set_text_editor_enabled(false);
+    }
+    editor.name_popup = true;
+    editor.name_query.clear();
+    editor.active = false;
+    editor.goto_popup = false;
+    editor.search_popup = false;
+    editor.status = "NOME DO CAMPO";
+    SDL_StartTextInput();
+}
+
+void append_memory_name_text(const char *text) {
+    auto &editor = app.memory_editor;
+    if (!editor.name_popup || !text) {
+        return;
+    }
+    editor.name_query += text;
+    editor.status = "ENTER SALVA CAMPO";
+}
+
+bool handle_memory_name_popup_key(SDL_Keycode key) {
+    auto &editor = app.memory_editor;
+    if (!editor.name_popup) {
+        return false;
+    }
+    if (key == SDLK_ESCAPE) {
+        editor.name_popup = false;
+        editor.status = "NOME FECHADO";
+        if (!editor.text_mode) {
+            SDL_StopTextInput();
+        }
+        return true;
+    }
+    if (key == SDLK_BACKSPACE) {
+        if (!editor.name_query.empty()) {
+            editor.name_query.pop_back();
+        }
+        return true;
+    }
+    if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+        save_debug_field_name(editor.name_query);
+        editor.name_popup = false;
+        if (!editor.text_mode) {
+            SDL_StopTextInput();
+        }
+        return true;
+    }
+    if (key == SDLK_SPACE) {
+        editor.name_query += ' ';
+    }
+    return true;
 }
 
 bool handle_goto_popup_key(SDL_Keycode key) {
@@ -351,6 +719,16 @@ void handle_events() {
         if (event.type == SDL_QUIT) {
             app.running = false;
         }
+        if (event.type == SDL_TEXTINPUT &&
+            app.memory_editor.name_popup) {
+            append_memory_name_text(event.text.text);
+            continue;
+        }
+        if (event.type == SDL_TEXTINPUT &&
+            app.memory_editor.search_popup) {
+            append_memory_search_text(event.text.text);
+            continue;
+        }
         if (event.type == SDL_TEXTINPUT && app.memory_editor.text_mode) {
             write_text_to_memory(event.text.text);
             continue;
@@ -373,25 +751,69 @@ void handle_events() {
             continue;
         }
         if (event.key.keysym.sym == SDLK_g &&
-            !app.memory_editor.goto_popup) {
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
             open_goto_popup();
             continue;
         }
         if (event.key.keysym.sym == SDLK_TAB &&
             !app.memory_editor.active &&
             !app.memory_editor.text_mode &&
-            !app.memory_editor.goto_popup) {
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
             app.turbo = !app.turbo;
             continue;
         }
         if (handle_goto_popup_key(event.key.keysym.sym)) {
             continue;
         }
+        if (event.key.keysym.sym == SDLK_n &&
+            app.memory_debug &&
+            !app.memory_editor.active &&
+            !app.memory_editor.text_mode &&
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
+            open_memory_name_popup();
+            continue;
+        }
+        if (handle_memory_name_popup_key(event.key.keysym.sym)) {
+            continue;
+        }
+        if (event.key.keysym.sym == SDLK_9 &&
+            app.memory_debug &&
+            !app.memory_editor.active &&
+            !app.memory_editor.text_mode &&
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
+            open_memory_search_popup();
+            continue;
+        }
+        if (handle_memory_search_popup_key(event.key.keysym.sym)) {
+            continue;
+        }
         if (event.key.keysym.sym == SDLK_v &&
             !app.memory_editor.active &&
             !app.memory_editor.text_mode &&
-            !app.memory_editor.goto_popup) {
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
             open_video_filter_menu();
+            continue;
+        }
+        if ((event.key.keysym.sym == SDLK_LEFTBRACKET ||
+             event.key.keysym.sym == SDLK_RIGHTBRACKET) &&
+            !app.memory_debug &&
+            !app.memory_editor.active &&
+            !app.memory_editor.text_mode &&
+            !app.memory_editor.goto_popup &&
+            !app.memory_editor.search_popup &&
+            !app.memory_editor.name_popup) {
+            adjust_video_filter_sharpness(
+                event.key.keysym.sym == SDLK_RIGHTBRACKET ? 5 : -5);
             continue;
         }
         if (event.key.keysym.sym == SDLK_i) {
@@ -401,6 +823,10 @@ void handle_events() {
                     set_text_editor_enabled(false);
                 }
                 app.memory_editor.active = false;
+                app.memory_editor.goto_popup = false;
+                app.memory_editor.search_popup = false;
+                app.memory_editor.name_popup = false;
+                SDL_StopTextInput();
             } else {
                 focus_player_candidate();
             }

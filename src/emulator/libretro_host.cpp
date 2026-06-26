@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -11,6 +12,9 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
+
+#include <SDL_opengl.h>
 
 namespace snes::frontend {
 
@@ -31,7 +35,36 @@ uintptr_t current_framebuffer() {
     return 0;
 }
 
-extern "C" void gl_noop() {}
+extern "C" uintptr_t gl_stub() {
+    return 0;
+}
+
+bool already_logged_missing_gl(const char *symbol) {
+    static std::vector<std::string> missing_symbols;
+    static bool limit_reported = false;
+    if (!symbol) {
+        return true;
+    }
+    for (const auto &logged : missing_symbols) {
+        if (logged == symbol) {
+            return true;
+        }
+    }
+    if (missing_symbols.size() >= 24) {
+        if (!limit_reported) {
+            std::cerr << "[opengl] outras funcoes ausentes omitidas.\n";
+            limit_reported = true;
+        }
+        return true;
+    }
+    missing_symbols.emplace_back(symbol);
+    return false;
+}
+
+bool log_missing_gl_symbols() {
+    static const bool enabled = std::getenv("SNES_LOG_MISSING_GL") != nullptr;
+    return enabled;
+}
 
 retro_proc_address_t get_proc_address(const char *symbol) {
     if (auto *address = SDL_GL_GetProcAddress(symbol)) {
@@ -52,13 +85,70 @@ retro_proc_address_t get_proc_address(const char *symbol) {
         "glObjectPtrLabel",
         "glTextureBarrier",
         "glTextureBarrierNV",
+        "glVertexP2ui",
+        "glVertexP2uiv",
+        "glVertexP3ui",
+        "glVertexP3uiv",
+        "glVertexP4ui",
+        "glVertexP4uiv",
+        "glTexCoordP1ui",
+        "glTexCoordP1uiv",
+        "glTexCoordP2ui",
+        "glTexCoordP2uiv",
+        "glTexCoordP3ui",
+        "glTexCoordP3uiv",
+        "glTexCoordP4ui",
+        "glTexCoordP4uiv",
+        "glMultiTexCoordP1ui",
+        "glMultiTexCoordP1uiv",
+        "glMultiTexCoordP2ui",
+        "glMultiTexCoordP2uiv",
+        "glMultiTexCoordP3ui",
+        "glMultiTexCoordP3uiv",
+        "glMultiTexCoordP4ui",
+        "glMultiTexCoordP4uiv",
+        "glNormalP3ui",
+        "glNormalP3uiv",
+        "glColorP3ui",
+        "glColorP3uiv",
+        "glColorP4ui",
+        "glColorP4uiv",
+        "glSecondaryColorP3ui",
+        "glSecondaryColorP3uiv",
     };
     for (const char *optional : void_optional) {
         if (std::strcmp(symbol, optional) == 0) {
-            return reinterpret_cast<retro_proc_address_t>(gl_noop);
+            return reinterpret_cast<retro_proc_address_t>(gl_stub);
         }
     }
+    if (app.n64_gliden64 && log_missing_gl_symbols() &&
+        !already_logged_missing_gl(symbol)) {
+        std::cerr << "[opengl] funcao ausente para GLideN64: "
+                  << (symbol ? symbol : "(null)") << '\n';
+    }
     return nullptr;
+}
+
+std::pair<int, int> hardware_window_size() {
+    if (app.n64_fast && !app.n64_widescreen) {
+        return {640, 480};
+    }
+    return app.n64_widescreen ? std::pair{960, 540} : std::pair{960, 720};
+}
+
+void enforce_hardware_window_size() {
+    if (!app.window || !app.n64_gliden64) {
+        return;
+    }
+    const auto [width, height] = hardware_window_size();
+    int current_width = 0;
+    int current_height = 0;
+    SDL_GetWindowSize(app.window, &current_width, &current_height);
+    if (current_width != width || current_height != height) {
+        SDL_SetWindowSize(app.window, width, height);
+    }
+    SDL_SetWindowMinimumSize(app.window, width, height);
+    SDL_SetWindowMaximumSize(app.window, width, height);
 }
 
 bool set_rumble_state(unsigned, retro_rumble_effect, uint16_t) {
@@ -176,10 +266,11 @@ void apply_n64_core_overrides() {
     if (app.system != ConsoleSystem::N64) {
         return;
     }
-    const std::pair<const char *, const char *> overrides[] = {
+    const std::pair<const char *, const char *> stable_overrides[] = {
         {"mupen64plus-cpucore", "cached_interpreter"},
         {"mupen64plus-rdp-plugin", "angrylion"},
         {"mupen64plus-rsp-plugin", "parallel"},
+        {"mupen64plus-angrylion-vioverlay", "Unfiltered"},
         {"mupen64plus-angrylion-sync", "Low"},
         {"mupen64plus-angrylion-multithread", "all threads"},
         {"mupen64plus-pak1", "none"},
@@ -187,9 +278,92 @@ void apply_n64_core_overrides() {
         {"mupen64plus-pak3", "none"},
         {"mupen64plus-pak4", "none"},
     };
+    const std::pair<const char *, const char *> widescreen_overrides[] = {
+        {"mupen64plus-cpucore", "cached_interpreter"},
+        {"mupen64plus-rdp-plugin", "gliden64"},
+        {"mupen64plus-rsp-plugin", "parallel"},
+        {"mupen64plus-aspect", "Wide (Adjusted)"},
+        {"mupen64plus-169screensize", "960x540"},
+        {"mupen64plus-EnableNativeResFactor", "1"},
+        {"mupen64plus-ThreadedRenderer", "False"},
+        {"mupen64plus-EnableFBEmulation", "False"},
+        {"mupen64plus-EnableN64DepthCompare", "False"},
+        {"mupen64plus-EnableShadersStorage", "False"},
+        {"mupen64plus-EnableTextureCache", "False"},
+        {"mupen64plus-GLideN64IniBehaviour", "early"},
+        {"mupen64plus-pak1", "none"},
+        {"mupen64plus-pak2", "none"},
+        {"mupen64plus-pak3", "none"},
+        {"mupen64plus-pak4", "none"},
+    };
+    const std::pair<const char *, const char *> gliden64_overrides[] = {
+        {"mupen64plus-cpucore", "cached_interpreter"},
+        {"mupen64plus-rdp-plugin", "gliden64"},
+        {"mupen64plus-rsp-plugin", "parallel"},
+        {"mupen64plus-aspect", "4:3"},
+        {"mupen64plus-43screensize", "960x720"},
+        {"mupen64plus-EnableNativeResFactor", "1"},
+        {"mupen64plus-ThreadedRenderer", "False"},
+        {"mupen64plus-EnableFBEmulation", "False"},
+        {"mupen64plus-EnableN64DepthCompare", "False"},
+        {"mupen64plus-EnableShadersStorage", "False"},
+        {"mupen64plus-EnableTextureCache", "False"},
+        {"mupen64plus-GLideN64IniBehaviour", "early"},
+        {"mupen64plus-pak1", "none"},
+        {"mupen64plus-pak2", "none"},
+        {"mupen64plus-pak3", "none"},
+        {"mupen64plus-pak4", "none"},
+    };
+    const std::pair<const char *, const char *> fast_overrides[] = {
+        {"mupen64plus-cpucore", "cached_interpreter"},
+        {"mupen64plus-rdp-plugin", "gliden64"},
+        {"mupen64plus-rsp-plugin", "parallel"},
+        {"mupen64plus-aspect", "4:3"},
+        {"mupen64plus-43screensize", "640x480"},
+        {"mupen64plus-169screensize", "640x360"},
+        {"mupen64plus-EnableNativeResFactor", "1"},
+        {"mupen64plus-ThreadedRenderer", "True"},
+        {"mupen64plus-HybridFilter", "False"},
+        {"mupen64plus-MultiSampling", "0"},
+        {"mupen64plus-FXAA", "0"},
+        {"mupen64plus-EnableNativeResTexrects", "Optimized"},
+        {"mupen64plus-EnableShadersStorage", "False"},
+        {"mupen64plus-EnableTextureCache", "False"},
+        {"mupen64plus-FrameDuping", "False"},
+        {"mupen64plus-GLideN64IniBehaviour", "early"},
+        {"mupen64plus-pak1", "none"},
+        {"mupen64plus-pak2", "none"},
+        {"mupen64plus-pak3", "none"},
+        {"mupen64plus-pak4", "none"},
+    };
+    const std::pair<const char *, const char *> fullspeed_overrides[] = {
+        {"mupen64plus-Framerate", "Fullspeed"},
+        {"mupen64plus-CountPerOp", "1"},
+        {"mupen64plus-CountPerOpDenomPot", "0"},
+    };
+    const std::span<const std::pair<const char *, const char *>> overrides =
+        app.n64_widescreen
+            ? std::span<const std::pair<const char *, const char *>>{
+                  widescreen_overrides}
+            : app.n64_fast
+                ? std::span<const std::pair<const char *, const char *>>{
+                      fast_overrides}
+            : app.n64_gliden64
+                ? std::span<const std::pair<const char *, const char *>>{
+                      gliden64_overrides}
+            : std::span<const std::pair<const char *, const char *>>{
+                  stable_overrides};
     for (const auto &[key, value] : overrides) {
         if (auto it = core_variables.find(key); it != core_variables.end()) {
             it->second = value;
+        }
+    }
+    if (app.n64_fullspeed) {
+        for (const auto &[key, value] : fullspeed_overrides) {
+            if (auto it = core_variables.find(key);
+                it != core_variables.end()) {
+                it->second = value;
+            }
         }
     }
 }
@@ -387,7 +561,8 @@ void start_media_workers() {
     }
     if (app.audio) {
         app.audio_pipeline =
-            std::make_unique<snes::AudioPipeline>(app.audio);
+            std::make_unique<snes::AudioPipeline>(
+                app.audio, app.audio_sample_rate);
         app.audio_pipeline->start();
     }
 }
@@ -489,6 +664,7 @@ void draw_frontend_status() {
 void present_latest_frame() {
     if (app.hardware_render) {
         if (app.window) {
+            enforce_hardware_window_size();
             SDL_GL_SwapWindow(app.window);
             ++app.presented_serial;
         }
@@ -499,32 +675,17 @@ void present_latest_frame() {
     if (!frame || frame->serial == app.presented_serial) {
         return;
     }
-    apply_stretched_render_scale();
-
-    if (!app.texture || frame->width != app.texture_width ||
-        frame->height != app.texture_height) {
-        SDL_DestroyTexture(app.texture);
-        const Uint32 format = frame->format == RETRO_PIXEL_FORMAT_XRGB8888
-                                  ? SDL_PIXELFORMAT_ARGB8888
-                                  : SDL_PIXELFORMAT_RGB565;
-        app.texture = SDL_CreateTexture(
-            app.renderer, format, SDL_TEXTUREACCESS_STREAMING,
-            frame->width, frame->height);
-        if (!app.texture) {
-            std::cerr << "Falha ao criar textura: " << SDL_GetError() << '\n';
-            app.running = false;
-            return;
-        }
-        apply_video_filter_to_texture();
-        app.texture_width = frame->width;
-        app.texture_height = frame->height;
+    if (!update_video_filter_texture(*frame)) {
+        return;
     }
-
-    SDL_UpdateTexture(app.texture, nullptr, frame->pixels.data(),
-                      static_cast<int>(frame->pitch));
+    SDL_RenderSetLogicalSize(app.renderer, 0, 0);
+    SDL_RenderSetViewport(app.renderer, nullptr);
+    SDL_RenderSetScale(app.renderer, 1.0f, 1.0f);
     SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, 255);
     SDL_RenderClear(app.renderer);
-    const SDL_Rect game_area{0, 0, game_width, game_height};
+
+    apply_stretched_render_scale();
+    const SDL_Rect game_area{0, 0, game_logical_width(), game_height};
     SDL_RenderCopy(app.renderer, app.texture, nullptr, &game_area);
     draw_video_filter_overlay();
     draw_lua_overlay();
@@ -537,6 +698,48 @@ void present_latest_frame() {
     }
     SDL_RenderPresent(app.renderer);
     app.presented_serial = frame->serial;
+}
+
+void prepare_hardware_frame() {
+    if (!app.hardware_render || !app.window || !app.gl_context) {
+        return;
+    }
+    using GlViewport = void (*)(GLint, GLint, GLsizei, GLsizei);
+    using GlScissor = void (*)(GLint, GLint, GLsizei, GLsizei);
+    using GlEnable = void (*)(GLenum);
+    using GlDisable = void (*)(GLenum);
+    using GlClearColor = void (*)(GLfloat, GLfloat, GLfloat, GLfloat);
+    using GlClear = void (*)(GLbitfield);
+    const auto viewport = reinterpret_cast<GlViewport>(
+        SDL_GL_GetProcAddress("glViewport"));
+    const auto scissor = reinterpret_cast<GlScissor>(
+        SDL_GL_GetProcAddress("glScissor"));
+    const auto enable = reinterpret_cast<GlEnable>(
+        SDL_GL_GetProcAddress("glEnable"));
+    const auto disable = reinterpret_cast<GlDisable>(
+        SDL_GL_GetProcAddress("glDisable"));
+    const auto clear_color = reinterpret_cast<GlClearColor>(
+        SDL_GL_GetProcAddress("glClearColor"));
+    const auto clear = reinterpret_cast<GlClear>(
+        SDL_GL_GetProcAddress("glClear"));
+    if (!viewport || !scissor || !enable || !disable ||
+        !clear_color || !clear) {
+        return;
+    }
+    SDL_GL_MakeCurrent(app.window, app.gl_context);
+    enforce_hardware_window_size();
+    int drawable_width = 0;
+    int drawable_height = 0;
+    SDL_GL_GetDrawableSize(app.window, &drawable_width, &drawable_height);
+    if (drawable_width <= 0 || drawable_height <= 0) {
+        SDL_GetWindowSize(app.window, &drawable_width, &drawable_height);
+    }
+    viewport(0, 0, drawable_width, drawable_height);
+    scissor(0, 0, drawable_width, drawable_height);
+    enable(GL_SCISSOR_TEST);
+    clear_color(0.0f, 0.0f, 0.0f, 1.0f);
+    clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    disable(GL_SCISSOR_TEST);
 }
 
 size_t audio_batch(const int16_t *data, size_t frames);
@@ -562,6 +765,8 @@ int16_t input_state(unsigned port, unsigned device, unsigned, unsigned id) {
     }
     if (app.headless ||
         app.memory_editor.active || app.memory_editor.goto_popup ||
+        app.memory_editor.search_popup ||
+        app.memory_editor.name_popup ||
         app.script_import.active || app.video_filter.menu_active) {
         return 0;
     }
@@ -695,10 +900,12 @@ bool init_audio(const retro_system_av_info &av) {
     wanted.freq = static_cast<int>(av.timing.sample_rate);
     wanted.format = AUDIO_S16SYS;
     wanted.channels = 2;
-    wanted.samples = 1024;
-    app.audio = SDL_OpenAudioDevice(nullptr, 0, &wanted, nullptr, 0);
+    wanted.samples = app.system == ConsoleSystem::N64 ? 2048 : 1024;
+    SDL_AudioSpec obtained{};
+    app.audio = SDL_OpenAudioDevice(nullptr, 0, &wanted, &obtained, 0);
+    app.audio_sample_rate = app.audio ? obtained.freq : wanted.freq;
     if (app.audio) {
-        SDL_PauseAudioDevice(app.audio, 0);
+        SDL_PauseAudioDevice(app.audio, 1);
     } else {
         std::cerr << "Audio desativado: " << SDL_GetError() << '\n';
     }
@@ -730,11 +937,15 @@ bool init_hardware_sdl() {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, major);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minor);
         if (!app.window) {
+            const auto [window_width, window_height] = hardware_window_size();
             app.window = SDL_CreateWindow(
                 window_title.c_str(),
-                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 720,
-                SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
-                    SDL_WINDOW_ALLOW_HIGHDPI);
+                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                window_width, window_height,
+                SDL_WINDOW_OPENGL);
+            if (app.window) {
+                enforce_hardware_window_size();
+            }
         }
         if (!app.window) {
             return false;
@@ -754,8 +965,13 @@ bool init_hardware_sdl() {
     if (app.hardware.context_type == RETRO_HW_CONTEXT_OPENGL_CORE) {
         const unsigned major = requested_major ? requested_major : 3U;
         const unsigned minor = requested_major ? requested_minor : 2U;
-        context_created = try_context(std::min(major, 4U),
-                                      major > 4U ? 1U : minor);
+        if (app.n64_gliden64) {
+            context_created = try_context(4, 1);
+        }
+        if (!context_created) {
+            context_created = try_context(std::min(major, 4U),
+                                          major > 4U ? 1U : minor);
+        }
         if (!context_created) {
             context_created = try_context(4, 1);
         }
@@ -778,7 +994,9 @@ bool init_hardware_sdl() {
     SDL_GL_MakeCurrent(app.window, app.gl_context);
     SDL_GL_SetSwapInterval(1);
     app.hardware_context_ready = true;
-    if (app.hardware.context_reset) {
+    // Mupen64Plus-Next only connects GLideN64's plugin table from
+    // context_reset() after retro_load_game() has marked first_context_reset.
+    if (app.hardware.context_reset && !app.n64_gliden64) {
         app.hardware.context_reset();
     }
     return true;
